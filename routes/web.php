@@ -3,9 +3,12 @@
 use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\PanelController;
-
 use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\PrestamoController;
+use App\Http\Controllers\ConsolidadoController;
+
+Route::get('/consolidado', [ConsolidadoController::class, 'index'])->name('consolidado.index');
+    Route::get('/consolidado/{cliente}', [ConsolidadoController::class, 'show'])->name('consolidado.show');
 
 Route::middleware(['auth'])->group(function () {
     Route::get('/prestamos', [PrestamoController::class, 'index'])->name('prestamos.index');
