@@ -8,6 +8,7 @@ use App\Models\Cliente;
 use App\Models\CuotaPrestamo;
 use Illuminate\Support\Facades\Auth;
 use App\Models\MovimientoPrestamo;
+use Carbon\Carbon;
 
 class PrestamoController extends Controller
 {
@@ -88,19 +89,26 @@ class PrestamoController extends Controller
         
         $cuotas = $prestamo->numero_cuotas ?? 1;
         $interes = $prestamo->tasa_interes ?? 0;
-        $fecha = $prestamo->fecha_inicio ?? now();
+
+        // Convertimos la fecha de texto a un objeto Carbon ejecutable
+        $fechaOriginal = $prestamo->fecha_inicio 
+            ? Carbon::parse($prestamo->fecha_inicio) 
+            : Carbon::now();
 
         $capital_cuota = round($capital / $cuotas, 2);
         $interes_cuota = round(($capital * ($interes/100)) / $cuotas, 2);
         $total_cuota = $capital_cuota + $interes_cuota;
 
         for($i=1; $i<=$cuotas; $i++){
+            // Usamos ->copy() para no alterar la fecha original en cada vuelta del ciclo
+            $fechaVencimiento = $fechaOriginal->copy()->addMonths($i);
+
             CuotaPrestamo::create([
                 'prestamo_id' => $prestamo->id,
                 'cliente_id' => $prestamo->cliente_id,
                 'empresa_id' => $prestamo->empresa_id,
                 'numero_cuota' => $i,
-                'fecha_vencimiento' => $fecha->addMonth(),
+                'fecha_vencimiento' => $fechaVencimiento, // Asignamos la fecha calculada adecuadamente
                 'capital' => $capital_cuota,
                 'interes' => $interes_cuota,
                 'total' => $total_cuota,
