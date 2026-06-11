@@ -3,32 +3,29 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
-use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use App\Models\Rol;
 
 class User extends Authenticatable
 {
-    /** @use HasFactory<UserFactory> */
+    /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasFactory, Notifiable;
 
     /**
-     * The attributes that are mass assignable.
-     *
-     * @var list<string>
+     * Los atributos que se pueden asignar de forma masiva.
      */
     protected $fillable = [
         'name',
         'email',
         'password',
+        'rol_id',
+        'empresa_id',
+        'cliente_id', // <-- Agregamos el nuevo campo aquí
     ];
 
     /**
-     * The attributes that should be hidden for serialization.
-     *
-     * @var list<string>
+     * Los atributos que deben ocultarse para la serialización.
      */
     protected $hidden = [
         'password',
@@ -36,9 +33,7 @@ class User extends Authenticatable
     ];
 
     /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
+     * Obtener los atributos que deben ser casteados.
      */
     protected function casts(): array
     {
@@ -48,8 +43,27 @@ class User extends Authenticatable
         ];
     }
 
+    /**
+     * Conexión con la tabla de Roles
+     */
     public function rol()
     {
-        return $this->belongsTo(Rol::class, 'rol_id');
+        return $this->belongsTo(Rol::class);
+    }
+
+    /**
+     * Conexión con la tabla de Empresas
+     */
+    public function empresa()
+    {
+        return $this->belongsTo(Empresa::class);
+    }
+
+    /**
+     * Conexión con la tabla de Clientes
+     */
+    public function cliente()
+    {
+        return $this->belongsTo(Cliente::class);
     }
 }

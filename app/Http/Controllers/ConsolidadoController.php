@@ -38,16 +38,17 @@ class ConsolidadoController extends Controller
     {
         $user = Auth::user();
 
-        // Control de acceso / Seguridad de la Empresa
+        // Control de seguridad por empresa para Administradores
         if ($user->rol->nombre === 'ADMIN' && $cliente->empresa_id != $user->empresa_id) {
             abort(403, 'No tienes permiso para ver este cliente.');
         }
         
-        if ($user->rol->nombre !== 'SUPERADMIN' && $user->rol->nombre !== 'ADMIN' && $cliente->id != $user->cliente_id) {
+        // SEGURIDAD PARA EL ROL CLIENTE: No puede ver consolidados de otros clientes ajenos
+        if ($user->rol->nombre === 'CLIENTE' && $cliente->id != $user->cliente_id) {
             abort(403, 'No tienes permiso para acceder a este recurso.');
         }
 
-        // Cargamos los préstamos del cliente
+        // Cargamos los préstamos del cliente usando la relación corregida hasMany
         $cliente->load('prestamos');
 
         return view('consolidado.show', compact('cliente'));

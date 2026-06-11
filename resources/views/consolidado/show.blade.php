@@ -39,7 +39,7 @@
         </div>
     </div>
 
-    <h2 class="text-xl font-bold text-gray-800 mb-4">Préstamos Asociados</h2>
+    <h2 class="text-xl font-bold text-gray-800 mb-4">Préstamos de este Cliente</h2>
 
     <div class="bg-white shadow-md rounded-lg overflow-hidden">
         <table class="min-w-full leading-normal">
@@ -51,7 +51,7 @@
                     <th class="px-5 py-3 text-center">Cuotas</th>
                     <th class="px-5 py-3 text-center">Interés</th>
                     <th class="px-5 py-3 text-center">Estado</th>
-                    <th class="px-5 py-3 text-center">Detalles</th>
+                    <th class="px-5 py-3 text-center">Acción</th>
                 </tr>
             </thead>
             <tbody class="text-gray-700 text-sm">
@@ -90,7 +90,7 @@
                         </td>
                         <td class="px-5 py-4 text-center">
                             <a href="{{ route('prestamos.show', $prestamo->id) }}" 
-                               class="text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded transition duration-150">
+                               class="text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1.5 rounded transition duration-150">
                                 Ver Ficha completa
                             </a>
                         </td>

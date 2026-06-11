@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Prestamo extends Model
 {
@@ -24,11 +25,6 @@ class Prestamo extends Model
         'total_cobrado',
     ];
 
-    public function cliente()
-    {
-        return $this->belongsTo(Cliente::class);
-    }
-
     public function cuotas()
     {
         return $this->hasMany(CuotaPrestamo::class);
@@ -37,5 +33,9 @@ class Prestamo extends Model
     public function movimientos()
     {
         return $this->hasMany(MovimientoPrestamo::class);
+    }
+    public function cliente(): BelongsTo
+    {
+        return $this->belongsTo(Cliente::class, 'id_cliente', 'id');
     }
 }

@@ -117,119 +117,139 @@ class PrestamoController extends Controller
         }
     }
 
-    public function show(Prestamo $prestamo)
+    // SOLUCIÓN: Eliminamos la palabra 'Prestamo' aquí para recibir el ID puro como parámetro de ruta
+    public function show($prestamoId)
     {
-        $cuotas = $prestamo->cuotas()->orderBy('numero_cuota')->get();
-        $movimientos = $prestamo->movimientos()->orderBy('fecha')->get();
+        $user = Auth::user();
 
-        return view('prestamos.show', compact('prestamo','cuotas','movimientos'));
-    }
+        // Buscamos manualmente el préstamo cargando de forma explícita al cliente, sus cuotas y movimientos
+        $prestamoCargado = Prestamo::with(['cliente', 'cuotas', 'movimientos'])->findOrFail($prestamoId);
 
-public function guardarMovimiento(Request $request, Prestamo $prestamo)
-{
-    $data = $request->validate([
-        'fecha' => 'required|date',
-        'tipo' => 'required|in:DEPÓSITO,PAGO',
-        'monto' => 'required|numeric|min:0.01',
-        'interes_cobrado' => 'nullable|numeric|min:0',
-        'capital_cobrado' => 'nullable|numeric|min:0',
-        'numero_operacion' => 'nullable|string|max:100',
-    ]);
+        // 🔒 CANDADO DE SEGURIDAD PARA EL ROL CLIENTE
+        if ($user->rol->nombre === 'CLIENTE' && $prestamoCargado->cliente_id != $user->cliente_id) {
+            abort(403, 'No tienes permiso para ver este préstamo.');
+        }
 
-    $capitalAntes = $prestamo->capital_pendiente;
+        // 🔒 CANDADO DE SEGURIDAD PARA EL ROL ADMIN
+        if ($user->rol->nombre === 'ADMIN' && $prestamoCargado->empresa_id != $user->empresa_id) {
+            abort(403, 'No tienes permiso para ver información de otra empresa.');
+        }
 
-    if ($data['tipo'] === 'DEPÓSITO') {
-        $capitalFinal = $capitalAntes + $data['monto'];
-        $interesCobrado = 0;
-        $capitalCobrado = 0;
-    } else {
-        $interesCobrado = $data['interes_cobrado'] ?? 0;
-        $capitalCobrado = $data['capital_cobrado'] ?? 0;
-        $capitalFinal = max(0, $capitalAntes - $capitalCobrado);
-    }
+        // Preparamos las colecciones ordenadas desde el nuevo objeto seguro
+        $cuotas = $prestamoCargado->cuotas->sortBy('numero_cuota');
+        $movimientos = $prestamoCargado->movimientos->sortBy('fecha');
 
-    MovimientoPrestamo::create([
-        'prestamo_id' => $prestamo->id,
-        'cliente_id' => $prestamo->cliente_id,
-        'empresa_id' => $prestamo->empresa_id,
-        'fecha' => $data['fecha'],
-        'tipo' => $data['tipo'],
-        'capital_antes' => $capitalAntes,
-        'monto' => $data['monto'],
-        'numero_operacion' => $data['numero_operacion'] ?? null,
-        'interes_cobrado' => $interesCobrado,
-        'capital_cobrado' => $capitalCobrado,
-        'capital_final' => $capitalFinal,
-        'usuario_id' => Auth::id(),
-    ]);
-
-    $prestamo->update([
-        'capital_pendiente' => $capitalFinal,
-        'interes_generado' => $prestamo->interes_generado + $interesCobrado,
-        'total_cobrado' => $prestamo->total_cobrado + ($data['tipo'] === 'PAGO' ? $data['monto'] : 0),
-        'estado' => $capitalFinal <= 0 ? 'CERRADO' : 'ACTIVO',
-    ]);
-
-    return redirect()->route('prestamos.show', $prestamo)->with('success', 'Movimiento registrado correctamente.');
-}
-
-public function pagarCuota(Request $request, $cuotaId)
-{
-    $cuota = CuotaPrestamo::findOrFail($cuotaId);
-    $prestamo = Prestamo::findOrFail($cuota->prestamo_id);
-
-    if ($cuota->estado !== 'PENDIENTE') {
-        return back()->with('error', 'Solo se puede pagar la cuota pendiente.');
-    }
-
-    $data = $request->validate([
-        'fecha_pago' => 'required|date',
-        'monto_pagado' => 'required|numeric|min:0.01',
-        'numero_operacion' => 'nullable|string|max:100',
-    ]);
-
-    $cuota->update([
-        'estado' => 'PAGADA',
-        'fecha_pago' => $data['fecha_pago'],
-        'monto_pagado' => $data['monto_pagado'],
-        'numero_operacion' => $data['numero_operacion'] ?? null,
-        'usuario_pago_id' => Auth::id(),
-    ]);
-
-    MovimientoPrestamo::create([
-        'prestamo_id' => $prestamo->id,
-        'cliente_id' => $prestamo->cliente_id,
-        'empresa_id' => $prestamo->empresa_id,
-        'fecha' => $data['fecha_pago'],
-        'tipo' => 'PAGO',
-        'capital_antes' => $prestamo->capital_pendiente,
-        'monto' => $data['monto_pagado'],
-        'interes_cobrado' => $cuota->interes,
-        'capital_cobrado' => $cuota->capital,
-        'capital_final' => max(0, $prestamo->capital_pendiente - $cuota->capital),
-        'usuario_id' => Auth::id(),
-    ]);
-
-    $nuevoCapitalPendiente = max(0, $prestamo->capital_pendiente - $cuota->capital);
-
-    $prestamo->update([
-        'capital_pendiente' => $nuevoCapitalPendiente,
-        'interes_generado' => $prestamo->interes_generado + $cuota->interes,
-        'total_cobrado' => $prestamo->total_cobrado + $data['monto_pagado'],
-        'estado' => $nuevoCapitalPendiente <= 0 ? 'CERRADO' : 'ACTIVO',
-    ]);
-
-    $siguienteCuota = CuotaPrestamo::where('prestamo_id', $prestamo->id)
-        ->where('numero_cuota', $cuota->numero_cuota + 1)
-        ->first();
-
-    if ($siguienteCuota && $siguienteCuota->estado === 'BLOQUEADA') {
-        $siguienteCuota->update([
-            'estado' => 'PENDIENTE',
+        return view('prestamos.show', [
+            'prestamo' => $prestamoCargado,
+            'cuotas' => $cuotas,
+            'movimientos' => $movimientos
         ]);
     }
 
-    return redirect()->route('prestamos.show', $prestamo)->with('success', 'Cuota pagada correctamente.');
-}
+    public function guardarMovimiento(Request $request, Prestamo $prestamo)
+    {
+        $data = $request->validate([
+            'fecha' => 'required|date',
+            'tipo' => 'required|in:DEPÓSITO,PAGO',
+            'monto' => 'required|numeric|min:0.01',
+            'interes_cobrado' => 'nullable|numeric|min:0',
+            'capital_cobrado' => 'nullable|numeric|min:0',
+            'numero_operacion' => 'nullable|string|max:100',
+        ]);
 
+        $capitalAntes = $prestamo->capital_pendiente;
+
+        if ($data['tipo'] === 'DEPÓSITO') {
+            $capitalFinal = $capitalAntes + $data['monto'];
+            $interesCobrado = 0;
+            $capitalCobrado = 0;
+        } else {
+            $interesCobrado = $data['interes_cobrado'] ?? 0;
+            $capitalCobrado = $data['capital_cobrado'] ?? 0;
+            $capitalFinal = max(0, $capitalAntes - $capitalCobrado);
+        }
+
+        MovimientoPrestamo::create([
+            'prestamo_id' => $prestamo->id,
+            'cliente_id' => $prestamo->cliente_id,
+            'empresa_id' => $prestamo->empresa_id,
+            'fecha' => $data['fecha'],
+            'tipo' => $data['tipo'],
+            'capital_antes' => $capitalAntes,
+            'monto' => $data['monto'],
+            'numero_operacion' => $data['numero_operacion'] ?? null,
+            'interes_cobrado' => $interesCobrado,
+            'capital_cobrado' => $capitalCobrado,
+            'capital_final' => $capitalFinal,
+            'usuario_id' => Auth::id(),
+        ]);
+
+        $prestamo->update([
+            'capital_pendiente' => $capitalFinal,
+            'interes_generado' => $prestamo->interes_generado + $interesCobrado,
+            'total_cobrado' => $prestamo->total_cobrado + ($data['tipo'] === 'PAGO' ? $data['monto'] : 0),
+            'estado' => $capitalFinal <= 0 ? 'CERRADO' : 'ACTIVO',
+        ]);
+
+        return redirect()->route('prestamos.show', $prestamo)->with('success', 'Movimiento registrado correctamente.');
+    }
+
+    public function pagarCuota(Request $request, $cuotaId)
+    {
+        $cuota = CuotaPrestamo::findOrFail($cuotaId);
+        $prestamo = Prestamo::findOrFail($cuota->prestamo_id);
+
+        if ($cuota->estado !== 'PENDIENTE') {
+            return back()->with('error', 'Solo se puede pagar la cuota pendiente.');
+        }
+
+        $data = $request->validate([
+            'fecha_pago' => 'required|date',
+            'monto_pagado' => 'required|numeric|min:0.01',
+            'numero_operacion' => 'nullable|string|max:100',
+        ]);
+
+        $cuota->update([
+            'estado' => 'PAGADA',
+            'fecha_pago' => $data['fecha_pago'],
+            'monto_pagado' => $data['monto_pagado'],
+            'numero_operacion' => $data['numero_operacion'] ?? null,
+            'usuario_pago_id' => Auth::id(),
+        ]);
+
+        MovimientoPrestamo::create([
+            'prestamo_id' => $prestamo->id,
+            'cliente_id' => $prestamo->cliente_id,
+            'empresa_id' => $prestamo->empresa_id,
+            'fecha' => $data['fecha_pago'],
+            'tipo' => 'PAGO',
+            'capital_antes' => $prestamo->capital_pendiente,
+            'monto' => $data['monto_pagado'],
+            'interes_cobrado' => $cuota->interes,
+            'capital_cobrado' => $cuota->capital,
+            'capital_final' => max(0, $prestamo->capital_pendiente - $cuota->capital),
+            'usuario_id' => Auth::id(),
+        ]);
+
+        $nuevoCapitalPendiente = max(0, $prestamo->capital_pendiente - $cuota->capital);
+
+        $prestamo->update([
+            'capital_pendiente' => $nuevoCapitalPendiente,
+            'interes_generado' => $prestamo->interes_generado + $cuota->interes,
+            'total_cobrado' => $prestamo->total_cobrado + $data['monto_pagado'],
+            'estado' => $nuevoCapitalPendiente <= 0 ? 'CERRADO' : 'ACTIVO',
+        ]);
+
+        $siguienteCuota = CuotaPrestamo::where('prestamo_id', $prestamo->id)
+            ->where('numero_cuota', $cuota->numero_cuota + 1)
+            ->first();
+
+        if ($siguienteCuota && $siguienteCuota->estado === 'BLOQUEADA') {
+            $siguienteCuota->update([
+                'estado' => 'PENDIENTE',
+            ]);
+        }
+
+        return redirect()->route('prestamos.show', $prestamo)->with('success', 'Cuota pagada correctamente.');
+    }
 }
