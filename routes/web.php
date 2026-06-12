@@ -43,7 +43,7 @@ Route::middleware(['auth'])->group(function () {
         ->middleware('role:SUPERADMIN,ADMIN,CLIENTE')
         ->name('consolidado.show');
 
-    // SOLUCOINADO: Ponemos la ruta fija de creación AQUÍ ARRIBA antes del parámetro dinámico
+    // SOLUCIONADO: Ponemos la ruta fija de creación AQUÍ ARRIBA antes del parámetro dinámico
     Route::get('/prestamos/crear', [PrestamoController::class, 'create'])
         ->middleware('role:SUPERADMIN,ADMIN')
         ->name('prestamos.create');
@@ -59,6 +59,12 @@ Route::middleware(['auth'])->group(function () {
 // =========================================================================
 Route::middleware(['auth', 'role:SUPERADMIN,ADMIN'])->group(function () {
     
+    // 🌟 AGREGADO AQUÍ: RUTAS DEL SIMULADOR DE CUOTAS
+    // Carga la pantalla con el formulario del simulador
+    Route::get('/prestamos/simulador', [PrestamoController::class, 'mostrarSimulador'])->name('prestamos.simulador.vista');
+    // Procesa las matemáticas en memoria mediante peticiones AJAX
+    Route::post('/prestamos/simulador/calcular', [PrestamoController::class, 'simular'])->name('prestamos.simular');
+
     // Gestión de Clientes
     Route::get('/clientes', [ClienteController::class, 'index'])->name('clientes.index');
     Route::get('/clientes/crear', [ClienteController::class, 'create'])->name('clientes.create');

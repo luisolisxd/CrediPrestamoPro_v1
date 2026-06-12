@@ -20,6 +20,11 @@ class CuotaPrestamo extends Model
         'estado',
         'fecha_pago',
         'monto_pagado',
+
+        // AGREGAR ESTOS
+        'interes_pagado',
+        'capital_pagado',
+
         'forma_pago_id',
         'numero_operacion',
         'usuario_pago_id',

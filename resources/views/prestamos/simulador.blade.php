@@ -5,113 +5,51 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous"></script>
 
-<div class="max-w-6xl mx-auto p-4" x-data="registroYSimulacion">
-    
-    <div class="flex justify-between items-center mb-4">
-        <h1 class="text-2xl font-bold text-gray-800">Registrar Nuevo Préstamo</h1>
-        <a href="{{ route('prestamos.index') }}" class="bg-gray-600 hover:bg-gray-700 text-white text-xs font-bold px-4 py-2 rounded shadow transition">
-            &larr; Volver al Listado
-        </a>
-    </div>
+<div class="max-w-6xl mx-auto p-4" x-data="simuladorPrestamo">
+    <h1 class="text-2xl font-bold text-gray-800 mb-6">Simulador Interactivo de Cuotas</h1>
 
     <div class="bg-white p-6 rounded-lg shadow mb-6">
-        <form method="POST" action="{{ route('prestamos.store') }}" id="form-prestamo">
-            @csrf
-
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+        <form @submit.prevent="calcularSimacion">
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
                 <div>
-                    <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Seleccionar Cliente *</label>
-                    <select name="cliente_id" id="cliente_id" class="w-full border rounded p-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500" required>
-                        <option value="">-- Seleccione un cliente --</option>
-                        @foreach($clientes as $cliente)
-                            <option value="{{ $cliente->id }}" {{ old('cliente_id') == $cliente->id ? 'selected' : '' }}>{{ $cliente->nombre }}</option>
-                        @endforeach
-                    </select>
-                    @error('cliente_id') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
+                    <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Monto (S/)</label>
+                    <input type="number" step="0.01" x-model="form.monto" class="w-full border rounded p-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500" required>
                 </div>
-
                 <div>
-                    <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Tipo de Préstamo *</label>
-                    <select name="tipo_prestamo" id="tipo_prestamo" x-model="form.tipo_prestamo" class="w-full border rounded p-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500" required>
-                        <option value="CUOTA_FIJA">CUOTA FIJA</option>
-                        <option value="CRONOGRAMA">CRONOGRAMA</option>
-                        <option value="DINAMICO">DINÁMICO</option>
-                    </select>
-                    @error('tipo_prestamo') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
+                    <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Tasa Interés (%)</label>
+                    <input type="number" step="0.01" x-model="form.tasa_interes" class="w-full border rounded p-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500" required>
                 </div>
-
                 <div>
-                    <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Capital a Prestar (S/) *</label>
-                    <input type="number" step="0.01" name="capital_prestado" x-model="form.monto" class="w-full border rounded p-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Ejemplo: 5000.00" required>
-                    @error('capital_prestado') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
+                    <label class="block text-xs font-bold text-gray-600 uppercase mb-1">N° Cuotas</label>
+                    <input type="number" x-model="form.numero_cuotas" class="w-full border rounded p-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500" required>
                 </div>
-
                 <div>
-                    <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Fecha de Desembolso / Inicio *</label>
-                    <input type="date" name="fecha_inicio" x-model="form.fecha_inicio" class="w-full border rounded p-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500" required>
-                    @error('fecha_inicio') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
-                </div>
-
-                <div>
-                    <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Número de Cuotas *</label>
-                    <input type="number" name="numero_cuotas" x-model="form.numero_cuotas" class="w-full border rounded p-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500" required>
-                    @error('numero_cuotas') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
-                </div>
-
-                <div>
-                    <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Frecuencia de Pago *</label>
-                    <select name="frecuencia_pago" x-model="form.frecuencia" class="w-full border rounded p-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500" required>
-                        <option value="MENSUAL">MENSUAL</option>
-                        <option value="QUINCENAL">QUINCENAL</option>
-                        <option value="SEMANAL">SEMANAL</option>
+                    <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Frecuencia</label>
+                    <select x-model="form.frecuencia" class="w-full border rounded p-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500">
                         <option value="DIARIO">DIARIO</option>
+                        <option value="SEMANAL">SEMANAL</option>
+                        <option value="QUINCENAL">QUINCENAL</option>
+                        <option value="MENSUAL">MENSUAL</option>
                     </select>
-                    @error('frecuencia_pago') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
                 </div>
-
                 <div>
-                    <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Tasa de Interés Total (%) *</label>
-                    <input type="number" step="0.01" name="tasa_interes" x-model="form.tasa_interes" class="w-full border rounded p-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500" required>
-                    @error('tasa_interes') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
-                </div>
-
-                <div>
-                    <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Día de Pago Fijo del Mes (1-31)</label>
-                    <input type="number" name="dia_pago" min="1" max="31" value="{{ old('dia_pago', 16) }}" class="w-full border rounded p-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500">
-                    @error('dia_pago') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
+                    <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Fecha Primer Pago</label>
+                    <input type="date" x-model="form.fecha_inicio" class="w-full border rounded p-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500" required>
                 </div>
             </div>
-
-            <div class="mb-6">
-                <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Notas / Observaciones sobre Cuotas Dobles</label>
-                <input type="text" name="cuotas_dobles_adicionales" value="{{ old('cuotas_dobles_adicionales') }}" class="w-full border rounded p-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Ejemplo: Diciembre y Julio se cobra cuota doble">
-            </div>
-
-            <div class="flex flex-wrap justify-between items-center gap-4 pt-4 border-t">
-                <div class="flex gap-2">
-                    <button type="button" @click="limpiarFormulario" class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold px-4 py-2 rounded text-sm transition text-center">
-                        Limpiar Formulario
-                    </button>
-                    
-                    <button type="button" @click="calcularSimulacion()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-black px-5 py-2 rounded text-sm shadow transition flex items-center gap-1 text-center">
-                        🧮 Simular Tabla de Pagos
-                    </button>
-                </div>
-
-                <div>
-                    <button type="submit" class="bg-purple-600 hover:bg-purple-700 text-white font-black px-6 py-2 rounded text-sm shadow transition text-center">
-                        🚀 Guardar y Generar Préstamo
-                    </button>
-                </div>
+            <div class="mt-4 flex justify-end">
+                <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-2 rounded text-sm transition">
+                    Calcular Proyección
+                </button>
             </div>
         </form>
     </div>
 
-    <div class="bg-white rounded-lg shadow overflow-hidden mt-6" x-show="cuotas.length > 0" x-transition style="display: none;">
+    <div class="bg-white rounded-lg shadow overflow-hidden" x-show="cuotas.length > 0" x-transition style="display: none;">
         <div class="bg-gray-800 text-white px-6 py-4 flex justify-between items-center flex-wrap gap-4">
             <div>
-                <h2 class="text-sm font-bold uppercase tracking-wider">Vista Previa del Cronograma Contractual</h2>
-                <p class="text-xs text-gray-300 mt-1">Verifica las fechas y montos antes de presionar el botón de Guardar.</p>
+                <h2 class="text-sm font-bold uppercase tracking-wider">Tabla de Amortización Proyectada</h2>
+                <p class="text-xs text-gray-300 mt-1">Simulación informativa previa al registro formal.</p>
             </div>
             <div class="flex gap-2">
                 <button type="button" @click="exportarExcel()" class="bg-green-600 hover:bg-green-700 text-white font-bold px-3 py-1.5 rounded text-xs transition flex items-center gap-1 shadow">
@@ -129,9 +67,9 @@
         <div id="area-impresion" class="p-6 bg-white">
             <div class="mb-4 border-b pb-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-xs text-gray-600">
                 <div><strong>Monto Proyectado:</strong> S/ <span x-text="Number(form.monto).toFixed(2)"></span></div>
-                <div><strong>Tasa de Interés:</strong> <span x-text="form.tasa_interes"></span>%</div>
+                <div><strong>Tasa Efectiva:</strong> <span x-text="form.tasa_interes"></span>%</div>
                 <div><strong>Frecuencia:</strong> <span x-text="form.frecuencia"></span></div>
-                <div><strong>Fecha Proyección:</strong> {{ date('d/m/Y H:i') }}</div>
+                <div><strong>Fecha Consulta:</strong> {{ date('d/m/Y H:i') }}</div>
             </div>
 
             <table class="w-full text-center border-collapse text-sm" id="tabla-simulacion">
@@ -172,29 +110,21 @@
 </div>
 
 <script>
-// 🌟 Estructuramos Alpine de forma estricta esperando al evento nativo de inicialización de la app
 document.addEventListener('alpine:init', () => {
-    Alpine.data('registroYSimulacion', () => ({
+    Alpine.data('simuladorPrestamo', () => ({
         form: {
-            monto: '{{ old("capital_prestado", 5000) }}',
-            tasa_interes: '{{ old("tasa_interes", 30) }}',
-            numero_cuotas: '{{ old("numero_cuotas", 12) }}',
-            frecuencia: '{{ old("frecuencia_pago", "MENSUAL") }}',
-            fecha_inicio: '{{ old("fecha_inicio", date("Y-m-d")) }}',
-            tipo_prestamo: '{{ old("tipo_prestamo", "CUOTA_FIJA") }}'
+            monto: 1000,
+            tasa_interes: 10,
+            numero_cuotas: 4,
+            frecuencia: 'MENSUAL',
+            fecha_inicio: new Date().toISOString().split('T')[0]
         },
         cuotas: [],
         totalCapital: '0.00',
         totalInteres: '0.00',
         totalGeneral: '0.00',
 
-        // Método corregido sin errores de tipeo
-        calcularSimulacion() {
-            if (!this.form.monto || !this.form.tasa_interes || !this.form.numero_cuotas || !this.form.fecha_inicio) {
-                alert('Por favor complete los campos obligatorios del formulario antes de simular.');
-                return;
-            }
-
+        calcularSimacion() {
             fetch("{{ route('prestamos.simular') }}", {
                 method: 'POST',
                 headers: {
@@ -214,7 +144,7 @@ document.addEventListener('alpine:init', () => {
                 this.totalInteres = int.toFixed(2);
                 this.totalGeneral = tot.toFixed(2);
             })
-            .catch(err => alert('Ocurrió un error al procesar el cronograma en memoria.'));
+            .catch(err => alert('Ocurrió un error al simular las cuotas.'));
         },
 
         formatFecha(fechaStr) {
@@ -223,14 +153,9 @@ document.addEventListener('alpine:init', () => {
             return `${parts[2]}/${parts[1]}/${parts[0]}`;
         },
 
-        limpiarFormulario() {
-            document.getElementById('form-prestamo').reset();
-            this.cuotas = [];
-        },
-
         exportarExcel() {
             if (typeof XLSX === 'undefined') {
-                alert('La librería de Excel aún se está cargando. Intente de nuevo en un segundo.');
+                alert('La librería de Excel aún se está cargando. Intente de nuevo.');
                 return;
             }
             try {
@@ -269,7 +194,7 @@ document.addEventListener('alpine:init', () => {
                 
                 let opciones = {
                     margin:       [10, 10, 10, 10],
-                    filename:     `Proyeccion_Credito_${this.form.monto}.pdf`,
+                    filename:     `Simulacion_Cronograma_${this.form.monto}.pdf`,
                     image:        { type: 'jpeg', quality: 0.98 },
                     html2canvas:  { scale: 2, useCORS: true, logging: false, letterRendering: true },
                     jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
@@ -283,7 +208,7 @@ document.addEventListener('alpine:init', () => {
 
         exportarImagen() {
             if (typeof html2canvas === 'undefined') {
-                alert('La librería de Imagen aún se está cargando. Intente de nuevo.');
+                alert('La librería de Imagen aún se está cargando.');
                 return;
             }
             try {
@@ -296,7 +221,7 @@ document.addEventListener('alpine:init', () => {
                     allowTaint: true
                 }).then(canvas => {
                     let link = document.createElement('a');
-                    link.download = `Imagen_Proyeccion_${this.form.monto}.jpg`;
+                    link.download = `Cronograma_Simulado_${this.form.monto}.jpg`;
                     
                     canvas.toBlob(function(blob) {
                         let url = URL.createObjectURL(blob);
