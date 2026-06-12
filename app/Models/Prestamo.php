@@ -4,9 +4,15 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Prestamo extends Model
 {
+    /**
+     * Forzamos a Laravel a que siempre cargue al cliente de forma automática
+     */
+    protected $with = ['cliente'];
+
     protected $fillable = [
         'empresa_id',
         'cliente_id',
@@ -25,17 +31,22 @@ class Prestamo extends Model
         'total_cobrado',
     ];
 
-    public function cuotas()
-    {
-        return $this->hasMany(CuotaPrestamo::class);
-    }
-
-    public function movimientos()
-    {
-        return $this->hasMany(MovimientoPrestamo::class);
-    }
+    /**
+     * Relación con el Cliente (CORREGIDA)
+     * Cambiamos 'id_cliente' por 'cliente_id' para que coincida exactamente con tu base de datos
+     */
     public function cliente(): BelongsTo
     {
-        return $this->belongsTo(Cliente::class, 'id_cliente', 'id');
+        return $this->belongsTo(Cliente::class, 'cliente_id');
+    }
+
+    public function cuotas(): HasMany
+    {
+        return $this->hasMany(CuotaPrestamo::class, 'prestamo_id');
+    }
+
+    public function movimientos(): HasMany
+    {
+        return $this->hasMany(MovimientoPrestamo::class, 'prestamo_id');
     }
 }

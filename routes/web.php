@@ -8,7 +8,7 @@ use App\Http\Controllers\PrestamoController;
 use App\Http\Controllers\ConsolidadoController;
 use App\Http\Controllers\UsuarioController;
 
-// Página de bienvenida pública (sin iniciar sesión)
+// Página de bienvenida pública
 Route::get('/', function () {
     return view('welcome');
 });
@@ -18,11 +18,8 @@ Route::get('/', function () {
 // =========================================================================
 Route::middleware(['auth'])->group(function () {
     
-    // Panel de Inicio / Dashboard común
-    Route::get('/dashboard', function () {
-        return view('dashboard');
-    })->name('dashboard');
-
+    // Vinculamos la URL /dashboard para que cargue la función index de PanelController
+    Route::get('/dashboard', [PanelController::class, 'index'])->name('dashboard');
     Route::get('/panel', [PanelController::class, 'index'])->name('panel');
 
     // Gestión del Perfil propio
@@ -32,21 +29,21 @@ Route::middleware(['auth'])->group(function () {
 });
 
 // =========================================================================
-// MÓDULO CONSOLIDADO DE CLIENTES Y CONSULTA DE PRÉSTAMOS (Lectura para Clientes)
+// MÓDULO CONSOLIDADO DE CLIENTES Y CONSULTA DE PRÉSTAMOS
 // =========================================================================
 Route::middleware(['auth'])->group(function () {
     
     // El listado general de consolidados SOLO lo ven SUPERADMIN y ADMIN
     Route::get('/consolidado', [ConsolidadoController::class, 'index'])
-        ->middleware('role:SUPERADMIN,ADMIN')
+        ->middleware('role:SUPERADMIN,ADMIN,CLIENTE')
         ->name('consolidado.index');
         
-    // Al detalle del consolidado entran todos (El Cliente solo accede a su propio ID)
+    // Al detalle del consolidado entran todos
     Route::get('/consolidado/{cliente}', [ConsolidadoController::class, 'show'])
         ->middleware('role:SUPERADMIN,ADMIN,CLIENTE')
         ->name('consolidado.show');
 
-    // PERMISO DE LECTURA DE PRÉSTAMO: Ahora el CLIENTE también puede entrar a ver la ficha de su préstamo
+    // Permiso de lectura de préstamo para los 3 roles
     Route::get('/prestamos/{prestamo}', [PrestamoController::class, 'show'])
         ->middleware('role:SUPERADMIN,ADMIN,CLIENTE')
         ->name('prestamos.show');
@@ -64,7 +61,7 @@ Route::middleware(['auth', 'role:SUPERADMIN,ADMIN'])->group(function () {
     Route::get('/clientes/{cliente}/editar', [ClienteController::class, 'edit'])->name('clientes.edit');
     Route::put('/clientes/{cliente}', [ClienteController::class, 'update'])->name('clientes.update');
 
-    // Acciones operativas de Préstamos, Movimientos y Cuotas (Crear, pagar, mover)
+    // Acciones operativas de Préstamos
     Route::get('/prestamos', [PrestamoController::class, 'index'])->name('prestamos.index');
     Route::get('/prestamos/crear', [PrestamoController::class, 'create'])->name('prestamos.create');
     Route::post('/prestamos', [PrestamoController::class, 'store'])->name('prestamos.store');
@@ -78,18 +75,16 @@ Route::middleware(['auth', 'role:SUPERADMIN,ADMIN'])->group(function () {
 });
 
 // =========================================================================
-// MÓDULOS EXCLUSIVOS PARA EL SÚPER ADMINISTRADOR (Acceso Total Global)
+// MÓDULOS EXCLUSIVOS PARA EL SÚPER ADMINISTRADOR
 // =========================================================================
 Route::middleware(['auth', 'role:SUPERADMIN'])->group(function () {
     
-    // Gestión de Usuarios del Sistema
     Route::get('/usuarios', [UsuarioController::class, 'index'])->name('usuarios.index');
     Route::get('/usuarios/crear', [UsuarioController::class, 'create'])->name('usuarios.create');
     Route::post('/usuarios', [UsuarioController::class, 'store'])->name('usuarios.store');
     Route::get('/usuarios/{usuario}/editar', [UsuarioController::class, 'edit'])->name('usuarios.edit');
     Route::put('/usuarios/{usuario}', [UsuarioController::class, 'update'])->name('usuarios.update');
 
-    // Configuraciones avanzadas del sistema
     Route::get('/empresas', function () { return view('empresas.index'); })->name('empresas.index');
     Route::get('/auditorias', function () { return view('auditorias.index'); })->name('auditorias.index');
     Route::get('/backups', function () { return '<h1>Backups</h1>'; })->name('backups.index');
