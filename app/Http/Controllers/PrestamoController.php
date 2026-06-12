@@ -32,11 +32,14 @@ class PrestamoController extends Controller
         $user = Auth::user();
 
         if($user->rol->nombre === 'SUPERADMIN') {
-            $clientes = Cliente::all();
+            // El Súper Administrador puede ver y asignar el préstamo a cualquier cliente del sistema
+            $clientes = Cliente::orderBy('nombre', 'asc')->get();
         } elseif($user->rol->nombre === 'ADMIN') {
-            $clientes = Cliente::where('empresa_id', $user->empresa_id)->get();
+            // El Administrador de empresa solo puede ver los clientes que pertenecen a su sucursal
+            $clientes = Cliente::where('empresa_id', $user->empresa_id)->orderBy('nombre', 'asc')->get();
         } else {
-            abort(403);
+            // Si por algún motivo un rol CLIENTE intenta entrar aquí, lo expulsamos
+            abort(403, 'No tienes permisos para registrar préstamos.');
         }
 
         return view('prestamos.create', compact('clientes'));
@@ -58,7 +61,19 @@ class PrestamoController extends Controller
             'fecha_inicio' => 'nullable|date',
         ]);
 
-        $data['empresa_id'] = $user->empresa_id ?? null;
+        if ($user->rol->nombre === 'SUPERADMIN') {
+            // Si es SUPERADMIN, el préstamo adopta automáticamente la empresa del cliente seleccionado
+            $cliente = Cliente::findOrFail($data['cliente_id']);
+            $data['empresa_id'] = $cliente->empresa_id;
+        } else {
+            // Si es un ADMIN, se usa la empresa a la que pertenece el administrador
+            $data['empresa_id'] = $user->empresa_id;
+        }
+
+        if (empty($data['empresa_id'])) {
+            return back()->withInput()->withErrors(['cliente_id' => 'El cliente seleccionado debe tener una empresa asignada.']);
+        }
+
         if (!empty($data['cuotas_dobles_adicionales'])) {
             $data['cuotas_dobles_adicionales'] = json_encode([
                 'detalle' => $data['cuotas_dobles_adicionales']
@@ -108,7 +123,7 @@ class PrestamoController extends Controller
                 'cliente_id' => $prestamo->cliente_id,
                 'empresa_id' => $prestamo->empresa_id,
                 'numero_cuota' => $i,
-                'fecha_vencimiento' => $fechaVencimiento, // Asignamos la fecha calculada adecuadamente
+                'fecha_vencimiento' => $fechaVencimiento, 
                 'capital' => $capital_cuota,
                 'interes' => $interes_cuota,
                 'total' => $total_cuota,
@@ -117,7 +132,6 @@ class PrestamoController extends Controller
         }
     }
 
-    // SOLUCIÓN: Eliminamos la palabra 'Prestamo' aquí para recibir el ID puro como parámetro de ruta
     public function show($prestamoId)
     {
         $user = Auth::user();
@@ -199,24 +213,85 @@ class PrestamoController extends Controller
         $cuota = CuotaPrestamo::findOrFail($cuotaId);
         $prestamo = Prestamo::findOrFail($cuota->prestamo_id);
 
-        if ($cuota->estado !== 'PENDIENTE') {
-            return back()->with('error', 'Solo se puede pagar la cuota pendiente.');
+        // 1. Validamos estrictamente el estado de la cuota que se intenta pagar
+        if (!in_array($cuota->estado, ['PENDIENTE', 'PARCIAL'])) {
+            return back()->with('error', 'Solo se pueden procesar pagos en cuotas pendientes o parciales.');
         }
 
         $data = $request->validate([
             'fecha_pago' => 'required|date',
             'monto_pagado' => 'required|numeric|min:0.01',
             'numero_operacion' => 'nullable|string|max:100',
+            'mora' => 'nullable|numeric|min:0',
         ]);
 
+        $montoRecibido = $data['monto_pagado'];
+        $moraInput = $data['mora'] ?? 0;
+
+        $totalOriginalCuota = $cuota->total;
+        $yaPagadoEnEstaCuota = $cuota->monto_pagado ?? 0;
+        $saldoRestanteCuota = max(0, $totalOriginalCuota - $yaPagadoEnEstaCuota);
+
+        if ($montoRecibido > $saldoRestanteCuota) {
+            return back()->with('error', 'El monto ingresado (S/ ' . number_format($montoRecibido, 2) . ') supera el saldo restante de la cuota (S/ ' . number_format($saldoRestanteCuota, 2) . ').');
+        }
+
+        $nuevoMontoAcumuladoCuota = $yaPagadoEnEstaCuota + $montoRecibido;
+        $esPagoTotal = (round($nuevoMontoAcumuladoCuota, 2) >= round($totalOriginalCuota, 2));
+        $nuevoEstadoCuota = $esPagoTotal ? 'PAGADA' : 'PARCIAL';
+
+        $interesAsignado = 0;
+        $capitalAsignado = 0;
+
+        if ($esPagoTotal) {
+            $interesAsignado = max(0, $cuota->interes - ($cuota->interes_pagado ?? 0));
+            $capitalAsignado = max(0, $cuota->capital - ($cuota->capital_pagado ?? 0));
+        } else {
+            $porcentajeInteres = $cuota->total > 0 ? ($cuota->interes / $cuota->total) : 0;
+            $interesAsignado = round($montoRecibido * $porcentajeInteres, 2);
+            $capitalAsignado = round($montoRecibido - $interesAsignado, 2);
+
+            $interesYaPagado = $cuota->interes_pagado ?? 0;
+            if (($interesYaPagado + $interesAsignado) > $cuota->interes) {
+                $interesAsignado = max(0, $cuota->interes - $interesYaPagado);
+                $capitalAsignado = round($montoRecibido - $interesAsignado, 2);
+            }
+        }
+
+        // 🚀 GESTIÓN DE CUOTA ADICIONAL POR MORA FIX: Buscamos el MAX real de la tabla
+        if ($moraInput > 0) {
+            // Buscamos el número de cuota más alto registrado actualmente para este préstamo
+            $maxCuotaNumero = CuotaPrestamo::where('prestamo_id', $prestamo->id)->max('numero_cuota') ?? 0;
+            $siguienteCuotaMora = $maxCuotaNumero + 1;
+
+            CuotaPrestamo::create([
+                'prestamo_id' => $prestamo->id,
+                'cliente_id' => $prestamo->cliente_id,
+                'empresa_id' => $prestamo->empresa_id,
+                'numero_cuota' => $siguienteCuotaMora, // Ahora será único (ej. Cuota 2, 3, etc.)
+                'fecha_vencimiento' => Carbon::parse($data['fecha_pago'])->addMonth(),
+                'capital' => 0.00,
+                'interes' => 0.00,
+                'total' => $moraInput,
+                'estado' => 'PENDIENTE',
+                'monto_pagado' => 0.00,
+                'interes_pagado' => 0.00,
+                'capital_pagado' => 0.00
+            ]);
+        }
+
+        // Actualizamos la cuota evaluada
         $cuota->update([
-            'estado' => 'PAGADA',
+            'estado' => $nuevoEstadoCuota,
             'fecha_pago' => $data['fecha_pago'],
-            'monto_pagado' => $data['monto_pagado'],
-            'numero_operacion' => $data['numero_operacion'] ?? null,
+            'monto_pagado' => $nuevoMontoAcumuladoCuota,
+            'interes_pagado' => ($cuota->interes_pagado ?? 0) + $interesAsignado,
+            'capital_pagado' => ($cuota->capital_pagado ?? 0) + $capitalAsignado,
+            'numero_operacion' => $data['numero_operacion'] ?? $cuota->numero_operacion,
             'usuario_pago_id' => Auth::id(),
         ]);
 
+        // Registramos movimiento en caja
         MovimientoPrestamo::create([
             'prestamo_id' => $prestamo->id,
             'cliente_id' => $prestamo->cliente_id,
@@ -224,32 +299,36 @@ class PrestamoController extends Controller
             'fecha' => $data['fecha_pago'],
             'tipo' => 'PAGO',
             'capital_antes' => $prestamo->capital_pendiente,
-            'monto' => $data['monto_pagado'],
-            'interes_cobrado' => $cuota->interes,
-            'capital_cobrado' => $cuota->capital,
-            'capital_final' => max(0, $prestamo->capital_pendiente - $cuota->capital),
+            'monto' => $montoRecibido + $moraInput, 
+            'interes_cobrado' => $interesAsignado, 
+            'mora_cobrada' => $moraInput, 
+            'capital_cobrado' => $capitalAsignado,
+            'capital_final' => max(0, $prestamo->capital_pendiente - $capitalAsignado),
+            'numero_operacion' => $data['numero_operacion'] ?? null,
             'usuario_id' => Auth::id(),
         ]);
 
-        $nuevoCapitalPendiente = max(0, $prestamo->capital_pendiente - $cuota->capital);
+        $nuevoCapitalPendientePrestamo = max(0, $prestamo->capital_pendiente - $capitalAsignado);
 
         $prestamo->update([
-            'capital_pendiente' => $nuevoCapitalPendiente,
-            'interes_generado' => $prestamo->interes_generado + $cuota->interes,
-            'total_cobrado' => $prestamo->total_cobrado + $data['monto_pagado'],
-            'estado' => $nuevoCapitalPendiente <= 0 ? 'CERRADO' : 'ACTIVO',
+            'capital_pendiente' => $nuevoCapitalPendientePrestamo,
+            'interes_generado' => $prestamo->interes_generado + $interesAsignado,
+            'mora_pagada' => ($prestamo->mora_pagada ?? 0) + $moraInput,
+            'total_cobrado' => $prestamo->total_cobrado + $montoRecibido + $moraInput,
+            'estado' => $nuevoCapitalPendientePrestamo <= 0 ? 'CERRADO' : 'ACTIVO',
         ]);
 
-        $siguienteCuota = CuotaPrestamo::where('prestamo_id', $prestamo->id)
-            ->where('numero_cuota', $cuota->numero_cuota + 1)
-            ->first();
+        // 🔒 FIX: Desbloqueamos la siguiente cuota correlativa SÓLO si la cuota pagada tiene capital/interés real (no es una cuota de mora)
+        if ($esPagoTotal && $cuota->total > 0 && ($cuota->capital > 0 || $cuota->interes > 0)) {
+            $siguienteCuota = CuotaPrestamo::where('prestamo_id', $prestamo->id)
+                ->where('numero_cuota', $cuota->numero_cuota + 1)
+                ->first();
 
-        if ($siguienteCuota && $siguienteCuota->estado === 'BLOQUEADA') {
-            $siguienteCuota->update([
-                'estado' => 'PENDIENTE',
-            ]);
+            if ($siguienteCuota && $siguienteCuota->estado === 'BLOQUEADA') {
+                $siguienteCuota->update(['estado' => 'PENDIENTE']);
+            }
         }
 
-        return redirect()->route('prestamos.show', $prestamo)->with('success', 'Cuota pagada correctamente.');
+        return redirect()->route('prestamos.show', $prestamo->id)->with('success', 'Pago procesado correctamente.');
     }
 }

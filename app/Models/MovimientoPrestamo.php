@@ -21,6 +21,7 @@ class MovimientoPrestamo extends Model
         'numero_operacion',
         'porcentaje_interes',
         'interes_cobrado',
+        'mora_cobrada',
         'capital_cobrado',
         'capital_final',
         'usuario_id',

@@ -43,7 +43,12 @@ Route::middleware(['auth'])->group(function () {
         ->middleware('role:SUPERADMIN,ADMIN,CLIENTE')
         ->name('consolidado.show');
 
-    // Permiso de lectura de préstamo para los 3 roles
+    // SOLUCOINADO: Ponemos la ruta fija de creación AQUÍ ARRIBA antes del parámetro dinámico
+    Route::get('/prestamos/crear', [PrestamoController::class, 'create'])
+        ->middleware('role:SUPERADMIN,ADMIN')
+        ->name('prestamos.create');
+
+    // Permiso de lectura de préstamo para los 3 roles (Abajo de la ruta fija)
     Route::get('/prestamos/{prestamo}', [PrestamoController::class, 'show'])
         ->middleware('role:SUPERADMIN,ADMIN,CLIENTE')
         ->name('prestamos.show');
@@ -63,7 +68,6 @@ Route::middleware(['auth', 'role:SUPERADMIN,ADMIN'])->group(function () {
 
     // Acciones operativas de Préstamos
     Route::get('/prestamos', [PrestamoController::class, 'index'])->name('prestamos.index');
-    Route::get('/prestamos/crear', [PrestamoController::class, 'create'])->name('prestamos.create');
     Route::post('/prestamos', [PrestamoController::class, 'store'])->name('prestamos.store');
     Route::post('/prestamos/{prestamo}/movimiento', [PrestamoController::class, 'guardarMovimiento'])->name('prestamos.movimiento');
     Route::post('/cuotas/{cuota}/pagar', [PrestamoController::class, 'pagarCuota'])->name('cuotas.pagar');

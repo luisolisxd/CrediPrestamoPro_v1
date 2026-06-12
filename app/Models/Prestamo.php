@@ -29,6 +29,7 @@ class Prestamo extends Model
         'fecha_vencimiento',
         'interes_generado',
         'total_cobrado',
+        'mora_pagada',
     ];
 
     /**
